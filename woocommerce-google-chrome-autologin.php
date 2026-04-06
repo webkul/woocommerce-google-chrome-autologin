@@ -3,7 +3,7 @@
 * Plugin Name: WooCommerce Chrome Login
 * Plugin URI: https://webkul.com
 * Description: Wordpress WooCommerce Chrome Login Plugin customers to remember their login credentials and allow auto login.
-* Version: 1.0.0
+* Version: 1.0.1
 * Author: Webkul
 * Text Domain: wc_chrome_auto_login
 * Author URI: https://webkul.com
