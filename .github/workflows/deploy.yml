@@ -3,7 +3,7 @@ name: Deploy Plugin to Staging
 on:
   push:
     branches:
-      - master   # or staging branch
+      - master
 
 jobs:
   deploy:
@@ -14,19 +14,34 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup SSH
+        shell: bash
         run: |
+          set -euo pipefail
+
           mkdir -p ~/.ssh
           echo "${{ secrets.STAGING_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+          # Fail clearly if secrets are missing/empty
+          test -n "${{ secrets.SSH_HOST }}"
+          test -n "${{ secrets.STAGING_USER }}"
+          test -n "${{ secrets.PLUGIN_PATH }}"
+          test -n "${{ secrets.STAGING_PORT }}"
+
+          # Add server host key to known_hosts (uses your configured port)
+          ssh-keyscan -p "${{ secrets.STAGING_PORT }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Deploy via rsync
+        shell: bash
         run: |
+          set -euo pipefail
           rsync -avz --delete \
-          ./ ${{ secrets.STAGING_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.PLUGIN_PATH }}
+            -e "ssh -p ${{ secrets.STAGING_PORT }}" \
+            ./ "${{ secrets.STAGING_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.PLUGIN_PATH }}"
 
       - name: Clear cache / optional
+        shell: bash
         run: |
-          ssh ${{ secrets.STAGING_USER }}@${{ secrets.SSH_HOST }} "
-          cd ${{ secrets.PLUGIN_PATH }}
-          "
+          set -euo pipefail
+          ssh -p "${{ secrets.STAGING_PORT }}" "${{ secrets.STAGING_USER }}@${{ secrets.SSH_HOST }}" \
+            "cd '${{ secrets.PLUGIN_PATH }}' && pwd"
