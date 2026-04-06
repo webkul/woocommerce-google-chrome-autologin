@@ -28,7 +28,5 @@ jobs:
       - name: Clear cache / optional
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
-          cd ${{ secrets.PLUGIN_PATH }} &&
-          wp plugin deactivate your-plugin &&
-          wp plugin activate your-plugin
+          cd ${{ secrets.PLUGIN_PATH }}
           "
