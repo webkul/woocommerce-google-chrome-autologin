@@ -8,7 +8,6 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: staging  # <-- MUST match your Environment name exactly
 
     steps:
       - name: Checkout Code
@@ -22,7 +21,6 @@ jobs:
           echo "${{ secrets.STAGING_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
 
-          # Fail clearly if secrets are missing/empty
           test -n "${{ secrets.SSH_HOST }}"
           test -n "${{ secrets.STAGING_USER }}"
           test -n "${{ secrets.PLUGIN_PATH }}"
