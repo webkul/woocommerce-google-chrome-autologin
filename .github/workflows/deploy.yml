@@ -3,7 +3,7 @@ name: Deploy Plugin to Staging
 on:
   push:
     branches:
-      - main   # or staging branch
+      - master   # or staging branch
 
 jobs:
   deploy:
