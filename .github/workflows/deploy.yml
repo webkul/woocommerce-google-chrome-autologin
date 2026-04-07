@@ -17,29 +17,20 @@ jobs:
         shell: bash
         env:
           STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          STAGING_PORT: ${{ secrets.STAGING_PORT }}
         run: |
           set -euo pipefail
 
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
-          # Write key (handle secrets that may have lost newlines)
           printf '%s\n' "$STAGING_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
 
-          # Verify key is valid before proceeding
-          ssh-keygen -y -f ~/.ssh/id_ed25519 > /dev/null || {
-            echo "::error::SSH key is invalid or malformed"
-            exit 1
-          }
-
-          # Add host to known_hosts (with timeout to catch unreachable servers)
-          ssh-keyscan -T 10 -p "$STAGING_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>&1 || {
-            echo "::error::Cannot reach $SSH_HOST:$STAGING_PORT — check firewall rules"
-            exit 1
-          }
+          cat >> ~/.ssh/config <<EOF
+          Host *
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+          EOF
 
       - name: Deploy via rsync
         shell: bash
@@ -51,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           rsync -avz --delete \
-            -e "ssh -p $STAGING_PORT -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
+            -e "ssh -p $STAGING_PORT -i ~/.ssh/id_ed25519" \
             ./ "$STAGING_USER@$SSH_HOST:$PLUGIN_PATH"
 
       - name: Clear cache / optional
@@ -65,6 +56,5 @@ jobs:
           set -euo pipefail
           ssh -i ~/.ssh/id_ed25519 \
               -p "$STAGING_PORT" \
-              -o StrictHostKeyChecking=no \
               "$STAGING_USER@$SSH_HOST" \
               "cd '$PLUGIN_PATH' && pwd"
