@@ -25,10 +25,10 @@ jobs:
           set -euo pipefail
 
           # Safe debug (does NOT print secret values)
-          echo "SSH_HOST present?      $([ -n "$SSH_HOST" ] && echo yes || echo no)"
-          echo "STAGING_USER present?  $([ -n "$STAGING_USER" ] && echo yes || echo no)"
-          echo "PLUGIN_PATH present?   $([ -n "$PLUGIN_PATH" ] && echo yes || echo no)"
-          echo "STAGING_PORT present?  $([ -n "$STAGING_PORT" ] && echo yes || echo no)"
+          echo "SSH_HOST present?      $SSH_HOST"
+          echo "STAGING_USER present?  $STAGING_USER"
+          echo "PLUGIN_PATH present?   $PLUGIN_PATH"
+          echo "STAGING_PORT present?  $STAGING_PORT"
           echo "SSH_KEY length:        ${#STAGING_SSH_KEY}"
 
           # Fail clearly if any required secret is missing/empty
