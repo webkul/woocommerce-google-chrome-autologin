@@ -3,7 +3,7 @@ name: Deploy Plugin to Staging
 on:
   push:
     branches:
-      - master   # or staging branch
+      - master
 
 jobs:
   deploy:
@@ -14,19 +14,60 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup SSH
+        shell: bash
+        env:
+          STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
+          PLUGIN_PATH: ${{ secrets.PLUGIN_PATH }}
+          STAGING_PORT: ${{ secrets.STAGING_PORT }}
         run: |
+          set -euo pipefail
+
+          # Safe debug (does NOT print secret values)
+          echo "SSH_HOST present?      $([ -n "$SSH_HOST" ] && echo yes || echo no)"
+          echo "STAGING_USER present?  $([ -n "$STAGING_USER" ] && echo yes || echo no)"
+          echo "PLUGIN_PATH present?   $([ -n "$PLUGIN_PATH" ] && echo yes || echo no)"
+          echo "STAGING_PORT present?  $([ -n "$STAGING_PORT" ] && echo yes || echo no)"
+          echo "SSH_KEY length:        ${#STAGING_SSH_KEY}"
+
+          # Fail clearly if any required secret is missing/empty
+          [ -n "$SSH_HOST" ] || (echo "::error::Missing secret SSH_HOST" && exit 1)
+          [ -n "$STAGING_USER" ] || (echo "::error::Missing secret STAGING_USER" && exit 1)
+          [ -n "$PLUGIN_PATH" ] || (echo "::error::Missing secret PLUGIN_PATH" && exit 1)
+          [ -n "$STAGING_PORT" ] || (echo "::error::Missing secret STAGING_PORT" && exit 1)
+          [ -n "$STAGING_SSH_KEY" ] || (echo "::error::Missing secret STAGING_SSH_KEY" && exit 1)
+
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+
+          # Write key safely (printf is more reliable than echo)
+          printf '%s' "$STAGING_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+          # Add host key
+          ssh-keyscan -p "$STAGING_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts
 
       - name: Deploy via rsync
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
+          PLUGIN_PATH: ${{ secrets.PLUGIN_PATH }}
+          STAGING_PORT: ${{ secrets.STAGING_PORT }}
         run: |
+          set -euo pipefail
           rsync -avz --delete \
-          ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.PLUGIN_PATH }}
+            -e "ssh -p $STAGING_PORT" \
+            ./ "$STAGING_USER@$SSH_HOST:$PLUGIN_PATH"
 
       - name: Clear cache / optional
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
+          PLUGIN_PATH: ${{ secrets.PLUGIN_PATH }}
+          STAGING_PORT: ${{ secrets.STAGING_PORT }}
         run: |
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
-          cd ${{ secrets.PLUGIN_PATH }}
-          "
+          set -euo pipefail
+          ssh -p "$STAGING_PORT" "$STAGING_USER@$SSH_HOST" \
+            "cd '$PLUGIN_PATH' && pwd"
