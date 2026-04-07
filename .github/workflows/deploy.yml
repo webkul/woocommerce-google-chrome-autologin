@@ -18,34 +18,28 @@ jobs:
         env:
           STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
-          STAGING_USER: ${{ secrets.STAGING_USER }}
-          PLUGIN_PATH: ${{ secrets.PLUGIN_PATH }}
           STAGING_PORT: ${{ secrets.STAGING_PORT }}
         run: |
           set -euo pipefail
 
-          # Safe debug (does NOT print secret values)
-          echo "SSH_HOST present?      $SSH_HOST"
-          echo "STAGING_USER present?  $STAGING_USER"
-          echo "PLUGIN_PATH present?   $PLUGIN_PATH"
-          echo "STAGING_PORT present?  $STAGING_PORT"
-          echo "SSH_KEY length:        ${#STAGING_SSH_KEY}"
-
-          # Fail clearly if any required secret is missing/empty
-          [ -n "$SSH_HOST" ] || (echo "::error::Missing secret SSH_HOST" && exit 1)
-          [ -n "$STAGING_USER" ] || (echo "::error::Missing secret STAGING_USER" && exit 1)
-          [ -n "$PLUGIN_PATH" ] || (echo "::error::Missing secret PLUGIN_PATH" && exit 1)
-          [ -n "$STAGING_PORT" ] || (echo "::error::Missing secret STAGING_PORT" && exit 1)
-          [ -n "$STAGING_SSH_KEY" ] || (echo "::error::Missing secret STAGING_SSH_KEY" && exit 1)
-
           mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
 
-          # Write key safely (printf is more reliable than echo)
-          printf '%s' "$STAGING_SSH_KEY" > ~/.ssh/id_ed25519
+          # Write key (handle secrets that may have lost newlines)
+          printf '%s\n' "$STAGING_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
 
-          # Add host key
-          ssh-keyscan -p "$STAGING_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts
+          # Verify key is valid before proceeding
+          ssh-keygen -y -f ~/.ssh/id_ed25519 > /dev/null || {
+            echo "::error::SSH key is invalid or malformed"
+            exit 1
+          }
+
+          # Add host to known_hosts (with timeout to catch unreachable servers)
+          ssh-keyscan -T 10 -p "$STAGING_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>&1 || {
+            echo "::error::Cannot reach $SSH_HOST:$STAGING_PORT — check firewall rules"
+            exit 1
+          }
 
       - name: Deploy via rsync
         shell: bash
@@ -57,7 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           rsync -avz --delete \
-            -e "ssh -p $STAGING_PORT" \
+            -e "ssh -p $STAGING_PORT -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
             ./ "$STAGING_USER@$SSH_HOST:$PLUGIN_PATH"
 
       - name: Clear cache / optional
@@ -69,5 +63,8 @@ jobs:
           STAGING_PORT: ${{ secrets.STAGING_PORT }}
         run: |
           set -euo pipefail
-          ssh -p "$STAGING_PORT" "$STAGING_USER@$SSH_HOST" \
-            "cd '$PLUGIN_PATH' && pwd"
+          ssh -i ~/.ssh/id_ed25519 \
+              -p "$STAGING_PORT" \
+              -o StrictHostKeyChecking=no \
+              "$STAGING_USER@$SSH_HOST" \
+              "cd '$PLUGIN_PATH' && pwd"
